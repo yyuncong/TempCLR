@@ -1,0 +1,5 @@
+einops
+faiss-gpu
+pandas
+tensorboardX==2.5.1
+transformers==3.4
