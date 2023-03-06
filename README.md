@@ -1,4 +1,4 @@
-# TempCLR
+# TempCLR: Temporal Alignment Representation with Contrastive Learning
 Codebase for ICLR 2023 submission [TempCLR: Temporal Alignment Representation with Contrastive Learning](https://arxiv.org/abs/2212.13738)
 
 Our work is developed based on the [MMPT toolkit](https://github.com/facebookresearch/fairseq/tree/main/examples/MMPT). Great thanks to the VideoCLIP team for open-sourcing the toolkit!
