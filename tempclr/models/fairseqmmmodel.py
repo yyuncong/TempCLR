@@ -3,11 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from fairseq.models import (
-    BaseFairseqModel,
-    register_model,
-    register_model_architecture
-)
+from fairseq.models import BaseFairseqModel, register_model, register_model_architecture
 
 
 @register_model("mmmodel")
@@ -26,7 +22,6 @@ class FairseqMMModel(BaseFairseqModel):
         return self.mmmodel(*args, **kwargs)
 
     def upgrade_state_dict_named(self, state_dict, name):
-
         super().upgrade_state_dict_named(state_dict, name)
 
         keys_to_delete = []

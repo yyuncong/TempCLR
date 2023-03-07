@@ -9,4 +9,3 @@ try:
     from .fairseqmmloss import *
 except ImportError:
     pass
-

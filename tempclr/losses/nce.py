@@ -26,17 +26,12 @@ class NCE(Loss):
         # duplicate negative examples
         batch_size = align_scores.size(0) // 2
         pos_scores = align_scores[:batch_size]
-        neg_scores = align_scores[batch_size:].view(1, batch_size).repeat(
-            batch_size, 1)
+        neg_scores = align_scores[batch_size:].view(1, batch_size).repeat(batch_size, 1)
         scores = torch.cat([pos_scores, neg_scores], dim=1)
         return self.loss(
             scores,
-            torch.zeros(
-                (batch_size,),
-                dtype=torch.long,
-                device=align_scores.device),
+            torch.zeros((batch_size,), dtype=torch.long, device=align_scores.device),
         )
-
 
 
 class MMContraLoss(Loss):
@@ -48,10 +43,8 @@ class MMContraLoss(Loss):
         logits_per_text = pooled_text @ pooled_video.t()
 
         targets = torch.arange(
-            pooled_video.size(0),
-            dtype=torch.long,
-            device=pooled_video.device)
+            pooled_video.size(0), dtype=torch.long, device=pooled_video.device
+        )
         loss_video = self.loss(logits_per_video, targets)
         loss_text = self.loss(logits_per_text, targets)
         return loss_video + loss_text
-

@@ -13,6 +13,7 @@ def _read_install_requires():
             str(requirement) for requirement in pkg_resources.parse_requirements(fp)
         ]
 
+
 setuptools.setup(
     name="tempclr",
     version="0.0.1",
@@ -29,5 +30,5 @@ setuptools.setup(
         "License :: CC-BY-NC",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.8',
+    python_requires=">=3.8",
 )

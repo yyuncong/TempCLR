@@ -11,4 +11,3 @@ try:
     from .fairseqmmtask import *
 except ImportError:
     pass
-

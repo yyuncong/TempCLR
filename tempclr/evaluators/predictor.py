@@ -15,9 +15,10 @@ from tqdm import tqdm
 
 class Predictor(object):
     """this base class is used to save predictions to disk
-        (and being called by a evaluator later).
-        Predictor has minimum support of single gpu prediction.
+    (and being called by a evaluator later).
+    Predictor has minimum support of single gpu prediction.
     """
+
     def __init__(self, config):
         self.pred_dir = None  # on-the-fly eval does not save the results.
         if hasattr(config, "eval") and config.eval is not None:
@@ -58,18 +59,14 @@ class Predictor(object):
 
 class RetrievalPredictor(Predictor):
     """generated `pooled_video` and `pooled_text`."""
+
     def __init__(self, config):
         super().__init__(config)
         from transformers import AutoTokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            config.dataset.bert_name)
 
-    def predict_loop(
-        self,
-        model,
-        eval_dataloader,
-        output_file="retrieval.npy"
-    ):
+        self.tokenizer = AutoTokenizer.from_pretrained(config.dataset.bert_name)
+
+    def predict_loop(self, model, eval_dataloader, output_file="retrieval.npy"):
         """on-the-fly prediction on a single gpu."""
         full_scores = []
         texts = []
@@ -84,18 +81,16 @@ class RetrievalPredictor(Predictor):
                         "cmasks": data[1],
                         "vfeats": data[2],
                         "vmasks": data[3],
-                        "video_id": data[4]
+                        "video_id": data[4],
                     }
                 data = self.to_ctx(data)
                 outputs = model(**data)
                 outputs.update(data)
-                outputs['video_id'] = list(data['video_id'][0])
+                outputs["video_id"] = list(data["video_id"][0])
 
                 self(outputs, full_scores)
                 for _cap in data["caps"]:
-                    texts.append(
-                        self.tokenizer.decode(_cap, skip_special_tokens=True)
-                    )
+                    texts.append(self.tokenizer.decode(_cap, skip_special_tokens=True))
 
         return self.finalize(full_scores, texts, output_file)
 
@@ -111,7 +106,7 @@ class RetrievalPredictor(Predictor):
 
     def _get_pooled_outputs(self, outputs):
         if "pooled_video" in outputs:
-            return outputs["pooled_video"], outputs["pooled_text"], outputs['video_id']
+            return outputs["pooled_video"], outputs["pooled_text"], outputs["video_id"]
         else:
             raise ValueError("unknown format of outputs.")
 
@@ -140,6 +135,7 @@ class CrossTaskPredictor(Predictor):
     CrossTaskPredictor needs to compute the average of logits
     for overlapped sliding-window.
     """
+
     def __init__(self, config):
         super().__init__(config)
         self.lsm = torch.nn.LogSoftmax(dim=1)
@@ -166,7 +162,8 @@ class CrossTaskPredictor(Predictor):
     def __call__(self, sample, model, Y_pred, Y_true):
         # please install dp from `https://github.com/DmZhukov/CrossTask`
         from dp import dp
-        vid, task = sample['video_id'][0], sample['task'][0]
+
+        vid, task = sample["video_id"][0], sample["task"][0]
         sample = self.to_ctx(sample)
         # compute the average logits over sliding windows.
         output = model(**sample)
@@ -181,16 +178,21 @@ class CrossTaskPredictor(Predictor):
         batch_logit_idx = 0
         for window_start in range(0, video_len, self.sliding_window):
             video_end = min(video_len - window_start, self.sliding_window_size)
-            logits[window_start: window_start + video_end] += batch_logits[
-                batch_logit_idx: batch_logit_idx + video_end]
+            logits[window_start : window_start + video_end] += batch_logits[
+                batch_logit_idx : batch_logit_idx + video_end
+            ]
             batch_logit_idx += video_end
-            logits_counts[window_start: window_start + video_end] += torch.ones((video_end, 1), dtype=torch.long)
+            logits_counts[window_start : window_start + video_end] += torch.ones(
+                (video_end, 1), dtype=torch.long
+            )
 
             if (video_len - window_start) <= self.sliding_window_size:
                 break
 
         logits /= logits_counts
-        assert logits.size() == (video_len, batch_logits.size(1)), "{}, {}".format(logits.size(), video_len)
+        assert logits.size() == (video_len, batch_logits.size(1)), "{}, {}".format(
+            logits.size(), video_len
+        )
 
         O = self.lsm(logits)
         y = np.zeros(O.size(), dtype=np.float32)
@@ -198,22 +200,20 @@ class CrossTaskPredictor(Predictor):
         if task not in Y_pred:
             Y_pred[task] = {}
         Y_pred[task][vid] = y
-        annot_path = os.path.join(
-            self.annotation_path, task+'_'+vid+'.csv')
+        annot_path = os.path.join(self.annotation_path, task + "_" + vid + ".csv")
         if os.path.exists(annot_path):
             if task not in Y_true:
                 Y_true[task] = {}
-            Y_true[task][vid] = self._read_assignment(
-                *y.shape, annot_path)
+            Y_true[task][vid] = self._read_assignment(*y.shape, annot_path)
 
     def finalize(self, Y_pred, Y_true, output_file=None):
         if output_file is not None:
-            with open(
-                    os.path.join(self.pred_dir, output_file + ".pkl"),
-                    "wb") as fw:
+            with open(os.path.join(self.pred_dir, output_file + ".pkl"), "wb") as fw:
                 pickle.dump(
-                    {"Y_pred": Y_pred, "Y_true": Y_true}, fw,
-                    protocol=pickle.HIGHEST_PROTOCOL)
+                    {"Y_pred": Y_pred, "Y_true": Y_true},
+                    fw,
+                    protocol=pickle.HIGHEST_PROTOCOL,
+                )
         return {"outputs": Y_pred, "targets": Y_true}
 
     def _read_assignment(self, T, K, path):
@@ -230,12 +230,11 @@ class CrossTaskPredictor(Predictor):
         """
 
         Y = np.zeros([T, K], dtype=np.uint8)
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             for line in f:
-                step, start, end = line.strip().split(',')
+                step, start, end = line.strip().split(",")
                 start = int(math.floor(float(start)))
                 end = int(math.ceil(float(end)))
                 step = int(step) - 1
                 Y[start:end, step] = 1
         return Y
-

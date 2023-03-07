@@ -9,6 +9,7 @@ import json
 
 from ..utils.metrics import DTW_eval_cum_dist, OTAM_eval_cum_dist, OTAM_pad, DTW_pad
 
+
 class Metric(object):
     def __init__(self, config, metric_names):
         self.metric_names = metric_names
@@ -72,6 +73,7 @@ class RetrievalMetric(Metric):
         if "error" in metrics:
             print(metrics["error"])
 
+
 class FullVideoRetrievalMetric(Metric):
     """
     this is modified from `howto100m/metrics.py`.
@@ -81,20 +83,26 @@ class FullVideoRetrievalMetric(Metric):
     """
 
     def __init__(
-            self,
-            config, 
-            metric_names=[
-                "R1", "R5", "R10",
-                "DTW-R1", "DTW-R5", "DTW-R10",
-                "OTAM-R1", "OTAM-R5", "OTAM-R10",
-            ]
-        ):
+        self,
+        config,
+        metric_names=[
+            "R1",
+            "R5",
+            "R10",
+            "DTW-R1",
+            "DTW-R5",
+            "DTW-R10",
+            "OTAM-R1",
+            "OTAM-R5",
+            "OTAM-R10",
+        ],
+    ):
         super().__init__(config, metric_names)
         self.error = False  # TODO(huxu): add to config to print error.
 
     def compute_metrics(self, outputs, texts, **kwargs):
         metrics = {}
-        clip_ids = kwargs['video_ids']
+        clip_ids = kwargs["video_ids"]
         m = outputs
 
         full_videos = list(set([d for d in clip_ids]))
@@ -113,9 +121,15 @@ class FullVideoRetrievalMetric(Metric):
         ]  # list of length n_vids, with the corresponding clip_ind
 
         # Retrieval single | full caption -> full video | for each caption get max prediction over a video, then average over all captions of a video.
-        video_preds_m = np.stack([np.max(m[:, v], axis=1) for v in video_inds], 1)  # (n_clips, n_vids)
-        video_preds_m2 = np.stack([np.mean(video_preds_m[v, :], axis=0) for v in video_inds], 0)  # (n_vids, n_vids)
-        metrics['R1'], metrics['R5'], metrics['R10'] = self.recall(video_preds_m2, np.arange(n_vids))
+        video_preds_m = np.stack(
+            [np.max(m[:, v], axis=1) for v in video_inds], 1
+        )  # (n_clips, n_vids)
+        video_preds_m2 = np.stack(
+            [np.mean(video_preds_m[v, :], axis=0) for v in video_inds], 0
+        )  # (n_vids, n_vids)
+        metrics["R1"], metrics["R5"], metrics["R10"] = self.recall(
+            video_preds_m2, np.arange(n_vids)
+        )
 
         max_length = -float("inf")
         for video_ind in video_inds:
@@ -136,10 +150,16 @@ class FullVideoRetrievalMetric(Metric):
                     .view(1, 1, len(video_inds[i]), len(video_inds[j]))
                     .detach()
                 )
-                distance_matrix *= (max_length * max_length) / (len(video_inds[i]) * len(video_inds[j]))
-                distance_matrix_padded = DTW_pad(distance_matrix, max_length, max_length)
+                distance_matrix *= (max_length * max_length) / (
+                    len(video_inds[i]) * len(video_inds[j])
+                )
+                distance_matrix_padded = DTW_pad(
+                    distance_matrix, max_length, max_length
+                )
 
-                matrix_sizes.append(torch.tensor([len(video_inds[i]), len(video_inds[j])]).unsqueeze(0))
+                matrix_sizes.append(
+                    torch.tensor([len(video_inds[i]), len(video_inds[j])]).unsqueeze(0)
+                )
 
                 distance_matrices.append(distance_matrix_padded)
 
@@ -151,8 +171,12 @@ class FullVideoRetrievalMetric(Metric):
         full_distance_matrix = DTW_eval_cum_dist(all_matrices)
         full_distance = full_distance_matrix[:, :, -1, -1]
 
-        video_preds_alignment = -full_distance.detach().cpu().numpy()  # (n_vids, n_vids)
-        metrics['DTW-R1'], metrics['DTW-R5'], metrics['DTW-R10'] = self.recall(video_preds_alignment, np.arange(n_vids))
+        video_preds_alignment = (
+            -full_distance.detach().cpu().numpy()
+        )  # (n_vids, n_vids)
+        metrics["DTW-R1"], metrics["DTW-R5"], metrics["DTW-R10"] = self.recall(
+            video_preds_alignment, np.arange(n_vids)
+        )
 
         # Retrieval single | full caption -> full video | OTAM
         clip_distances = torch.tensor(1 - m)
@@ -174,12 +198,22 @@ class FullVideoRetrievalMetric(Metric):
                     .view(1, 1, len(video_inds[i]), len(video_inds[j]))
                     .detach()
                 )
-                distance_matrix *= (max_length * max_length) / (len(video_inds[i]) * len(video_inds[j]))
+                distance_matrix *= (max_length * max_length) / (
+                    len(video_inds[i]) * len(video_inds[j])
+                )
 
-                matrix_sizes.append(torch.tensor([len(video_inds[i]), len(video_inds[j])]).unsqueeze(0))
+                matrix_sizes.append(
+                    torch.tensor([len(video_inds[i]), len(video_inds[j])]).unsqueeze(0)
+                )
 
-                distance_matrix_padded = OTAM_pad(distance_matrix, max_length, max_length)
-                distance_matrix_padded_t = OTAM_pad(torch.transpose(distance_matrix, dim0=-2, dim1=-1), max_length, max_length)
+                distance_matrix_padded = OTAM_pad(
+                    distance_matrix, max_length, max_length
+                )
+                distance_matrix_padded_t = OTAM_pad(
+                    torch.transpose(distance_matrix, dim0=-2, dim1=-1),
+                    max_length,
+                    max_length,
+                )
 
                 distance_matrices.append(distance_matrix_padded)
                 distance_matrices_t.append(distance_matrix_padded_t)
@@ -192,10 +226,16 @@ class FullVideoRetrievalMetric(Metric):
         all_matrices_t = torch.cat(all_matrices_t, dim=0)
         full_distance_matrix = OTAM_eval_cum_dist(all_matrices)
         full_distance_matrix_t = OTAM_eval_cum_dist(all_matrices_t)
-        full_distance = full_distance_matrix[:, :, -1, -1] + full_distance_matrix_t[:, :, -1, -1]
+        full_distance = (
+            full_distance_matrix[:, :, -1, -1] + full_distance_matrix_t[:, :, -1, -1]
+        )
 
-        video_preds_alignment = -full_distance.detach().cpu().numpy()  # (n_vids, n_vids)
-        metrics['OTAM-R1'], metrics['OTAM-R5'], metrics['OTAM-R10'] = self.recall(video_preds_alignment, np.arange(n_vids))
+        video_preds_alignment = (
+            -full_distance.detach().cpu().numpy()
+        )  # (n_vids, n_vids)
+        metrics["OTAM-R1"], metrics["OTAM-R5"], metrics["OTAM-R10"] = self.recall(
+            video_preds_alignment, np.arange(n_vids)
+        )
 
         return metrics
 
@@ -214,9 +254,15 @@ class FullVideoRetrievalMetric(Metric):
 
         print(
             "Caption Average:\nR@1: {:.4f} - R@5: {:.4f} - R@10: {:.4f}\nDTW:\nR@1: {:.4f} - R@5: {:.4f} - R@10: {:.4f}\nOTAM\nR@1: {:.4f} - R@5: {:.4f} - R@10: {:.4f}".format(
-                r1, r5, r10,
-                dtw_r1, dtw_r5, dtw_r10,
-                otam_r1, otam_r5, otam_r10,
+                r1,
+                r5,
+                r10,
+                dtw_r1,
+                dtw_r5,
+                dtw_r10,
+                otam_r1,
+                otam_r5,
+                otam_r10,
             )
         )
         if "error" in metrics:
@@ -255,11 +301,10 @@ class CrossTaskMetric(Metric):
         return results
 
     def print_computed_metrics(self, metrics):
-        print('Recall: {0:0.3f}'.format(metrics["recall"]))
+        print("Recall: {0:0.3f}".format(metrics["recall"]))
         for task in metrics:
             if task != "recall":
-                print('Task {0}. Recall = {1:0.3f}'.format(
-                    task, metrics[task]))
+                print("Task {0}. Recall = {1:0.3f}".format(task, metrics[task]))
 
     def _get_recalls(self, Y_true, Y_pred):
         """refactored from
@@ -273,8 +318,6 @@ class CrossTaskMetric(Metric):
                 y_true = ys_true[vid]
                 y_pred = ys_pred[vid]
                 step_total[task] += (y_true.sum(axis=0) > 0).sum()
-                step_match[task] += (y_true*y_pred).sum()
-        recalls = {
-            task: step_match[task] / n for task, n in step_total.items()}
+                step_match[task] += (y_true * y_pred).sum()
+        recalls = {task: step_match[task] / n for task, n in step_total.items()}
         return recalls
-
