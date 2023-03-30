@@ -38,11 +38,13 @@ We use pre-trained [S3D](https://github.com/antoine77340/S3D_HowTo100M) for vide
 
 Download VideoCLIP checkpoint `https://dl.fbaipublicfiles.com/MMPT/retri/videoclip/checkpoint_best.pt` to `runs/retri/pretrained/videoclip`.
 
-Based on the best VideoCLIP checkpoint, we finetuned [3 checkpoints](https://drive.google.com/drive/folders/1aD6l8yp0dsPpRKbmg3a_CBiK6UVN8GrR?usp=sharing) on a small subset (7.5%) of HowTo100M using OTAM and DTW metrics. 
+Based on the best VideoCLIP checkpoint, we finetuned [3 checkpoints](https://drive.google.com/drive/folders/1aD6l8yp0dsPpRKbmg3a_CBiK6UVN8GrR?usp=sharing) on a small subset (7.5%) of HowTo100M using OTAM and DTW metrics. The majority of the results we have reported are from the layernorm checkpoints.
 
 `checkpoint_layernorm_OTAM`: Only layernorm in the original model was finetuned and we used OTAM as the metric for fine-tuning.
+
 `checkpoint_layernorm_DTW`: Only layernorm in the original model was finetuned and we used DTW as the metric for fine-tuning.
-`checkpoint_allparameters_DTW`: All parameters in the original model was finetuned and we used DTW as the metric for fine-tuning. (This is only for zero-shot action step localization.)
+
+`checkpoint_allparameters_DTW`: All parameters in the original model was finetuned and we used DTW as the metric for fine-tuning. (This is only for zero-shot action step localization. *Performance drops for any other tasks*)
 
 #### Data Preparation
 See [dataset](https://github.com/facebookresearch/fairseq/blob/main/examples/MMPT/DATASET.md) from the MMPT toolkit for each dataset.
