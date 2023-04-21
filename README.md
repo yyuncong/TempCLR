@@ -4,6 +4,7 @@ Codebase for ICLR 2023 submission [TempCLR: Temporal Alignment Representation wi
 Our work is developed based on the [MMPT toolkit](https://github.com/facebookresearch/fairseq/tree/main/examples/MMPT). Great thanks to the VideoCLIP team for open-sourcing the toolkit!
 
 ## Updates
+- (April 2023) Added the evaluation pipeline for background kept full video retrieval on youcook2
 - (March 2023) The checkpoints pre-trained using DTW and OTAM has been [published](https://drive.google.com/drive/folders/1aD6l8yp0dsPpRKbmg3a_CBiK6UVN8GrR?usp=sharing).
 
 ## Installation
