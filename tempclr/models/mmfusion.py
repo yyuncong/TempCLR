@@ -597,6 +597,52 @@ class MMFusionActionLocalization(MMFusion):
 # --------------- MMFusionSeparate for end tasks ---------------
 
 
+class MMFusionSeparateFullVideoBGRetrieval(MMFusionSeparate):
+    def __init__(self, config, **kwargs):
+        super().__init__(config)
+        tokenizer = AutoTokenizer.from_pretrained(config.dataset.bert_name)
+        self.cls_token_id = tokenizer.cls_token_id
+        self.sep_token_id = tokenizer.sep_token_id
+        self.pad_token_id = tokenizer.pad_token_id
+
+    def forward(self, caps, cmasks, vfeats, vmasks, **kwargs):
+        # ActionLocalization assume of batch_size=1, squeeze it.
+        caps = caps.squeeze(0)
+        cmasks = cmasks.squeeze(0)
+        vfeats = vfeats.squeeze(0)
+        vmasks = vmasks.squeeze(0)
+
+        dummy_caps = (
+            torch.LongTensor(
+                [
+                    [
+                        self.cls_token_id,
+                        self.sep_token_id,
+                        self.pad_token_id,
+                        self.sep_token_id,
+                    ]
+                ],
+            )
+            .to(caps.device)
+            .repeat(vfeats.size(0), 1)
+        )
+        dummy_cmasks = (
+            torch.BoolTensor([[0, 1, 0, 1]])  # pad are valid for attention.
+            .to(caps.device)
+            .repeat(vfeats.size(0), 1)
+        )
+
+        outputs = self.forward_video(
+            vfeats, vmasks, dummy_caps, dummy_cmasks, output_hidden_states=False
+        )
+
+        video_seq = outputs
+
+        pooled_text = self.forward_text(caps, cmasks, output_hidden_states=False)
+
+        return {"pooled_video": video_seq, "pooled_text": pooled_text}
+
+
 class MMFusionSeparateActionLocalization(MMFusionSeparate):
     def __init__(self, config, **kwargs):
         super().__init__(config)

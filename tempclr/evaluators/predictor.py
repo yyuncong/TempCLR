@@ -130,6 +130,108 @@ class RetrievalPredictor(Predictor):
         return np.matmul(text_hidden, video_hidden.T), video_ids
 
 
+class BGRetrievalPredictor(Predictor):
+    """generated `pooled_video` and `pooled_text`."""
+
+    def __init__(self, config):
+        super().__init__(config)
+        from transformers import AutoTokenizer
+
+        self.tokenizer = AutoTokenizer.from_pretrained(config.dataset.bert_name)
+
+    def predict_loop(self, model, eval_dataloader, output_file="retrieval.npy"):
+        """on-the-fly prediction on a single gpu."""
+        full_scores = []
+        texts = []
+        model.eval()
+        model = model.cuda()
+        with torch.no_grad():
+            for data in eval_dataloader:
+                # convert to dict.
+                if not isinstance(data, dict):
+                    data = {
+                        "caps": data[0],
+                        "cmasks": data[1],
+                        "vfeats": data[2],
+                        "vmasks": data[3],
+                        "video_id": data[4],
+                    }
+                data = self.to_ctx(data)
+                outputs = model(**data)
+                outputs.update(data)
+
+                outputs["video_id"] = data["video_id"]
+                self(outputs, full_scores)
+                for cap in data["caps"]:
+                    for _cap in cap:
+                        texts.append(
+                            self.tokenizer.decode(_cap, skip_special_tokens=True)
+                        )
+
+        return self.finalize(full_scores, texts, output_file)
+
+    def __call__(self, sample, full_scores):
+        scores = self._get_pooled_outputs(sample)
+        self._append_scores(scores, full_scores)
+
+    def finalize(self, full_scores, texts, output_file=None):
+        outputs, video_ids, video_lengths, text_lengths = self._aggregate_scores(
+            full_scores
+        )
+        if output_file is not None:
+            np.save(os.path.join(self.pred_dir, output_file + ".npy"), outputs)
+        return {
+            "outputs": outputs,
+            "texts": texts,
+            "video_ids": video_ids,
+            "video_lengths": video_lengths,
+            "text_lengths": text_lengths,
+        }
+
+    def _get_pooled_outputs(self, outputs):
+        #
+        if "pooled_video" in outputs:
+            return outputs["pooled_video"], outputs["pooled_text"], outputs["video_id"]
+        else:
+            raise ValueError("unknown format of outputs.")
+
+    def _append_scores(self, scores, full_scores):
+        # assert len(scores) == 2
+        if len(full_scores) == 0:
+            full_scores.append([])
+            full_scores.append([])
+            full_scores.append([])
+            full_scores.append([])
+            full_scores.append([])
+        full_scores[0].append(scores[0].cpu().detach().numpy())
+        full_scores[1].append(scores[1].cpu().detach().numpy())
+        full_scores[2] += scores[2]
+        full_scores[3].append(len(scores[0]))
+        full_scores[4].append(len(scores[1]))
+
+    def _aggregate_scores(self, scores):
+        # assert len(scores) == 2
+        video_hidden = np.concatenate(scores[0], axis=0)
+        text_hidden = np.concatenate(scores[1], axis=0)
+
+        video_ids = scores[2]
+        # video_lengths = np.concatenate(scores[3], axis=0)
+        video_lengths = scores[3]
+        text_lengths = scores[4]
+        # clear up.
+        self.full_scores = []
+        #
+
+        # return sim.detach().cpu().numpy(), video_ids
+
+        return (
+            np.matmul(text_hidden, video_hidden.T),
+            video_ids,
+            video_lengths,
+            text_lengths,
+        )
+
+
 class CrossTaskPredictor(Predictor):
     """
     CrossTaskPredictor needs to compute the average of logits

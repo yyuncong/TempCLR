@@ -135,6 +135,126 @@ class YoucookVideoProcessor(VideoProcessor):
         return feat[start:end]
 
 
+class YoucookFullVideoBGProcessor(VideoProcessor):
+    """video_fn is video_id now."""
+
+    def __call__(self, video_fn):
+        video_id = video_fn
+        feat = np.load(os.path.join(self.vfeat_dir, video_id + ".npy"))
+        return feat
+
+
+class YoucookFullVideoBGTextProcessor(TextProcessor):
+    def __call__(self, text_ids):
+        tokens = []
+        for text_id in text_ids:
+            caption = self.tokenizer(text_id, add_special_tokens=False)
+            tokens.append(caption["input_ids"])
+        return tokens
+
+
+class YoucookFullVideoBGAligner(Aligner):
+    def __init__(self, config):
+        super().__init__(config)
+        self.sliding_window = config.sliding_window
+        self.sliding_window_size = config.sliding_window_size
+
+    def __call__(self, video_id, video_feature, text_feature):
+        vid = video_id
+        video_len = len(video_feature)
+
+        vfeats, vmasks = [], []
+
+        for window_start in range(0, video_len, self.sliding_window):
+            video_start = 0
+            video_end = min(video_len - window_start, self.sliding_window_size)
+            video_clip = {"start": [video_start], "end": [video_end]}
+
+            vfeat, vmask = self._build_video_seq(
+                video_feature[window_start : window_start + video_end], video_clip
+            )
+            vfeats.append(vfeat)
+            vmasks.append(vmask)
+
+            if (video_len - window_start) <= self.sliding_window_size:
+                break
+
+        vfeats = torch.stack(vfeats)
+        vmasks = torch.stack(vmasks)
+
+        caps, cmasks = [], []
+        for step in text_feature:
+            step_text_feature = {"start": [0], "end": [1], "cap": [step]}
+            step_text_clip_index = [0]
+            cap, cmask = self._build_text_seq(step_text_feature, step_text_clip_index)
+            caps.append(cap)
+            cmasks.append(cmask)
+        caps = torch.stack(caps)
+        cmasks = torch.stack(cmasks)
+
+        return {
+            "caps": caps,
+            "cmasks": cmasks,
+            "vfeats": vfeats,  # X for original code.
+            "vmasks": vmasks,
+            "video_id": vid,
+            "video_len": video_len,  # for later checking.
+        }
+
+
+class YoucookFullVideoBGMetaProcessor(MetaProcessor):
+    def __init__(self, config):
+        super().__init__(config)
+        vfeat_dir = config.vfeat_dir
+        print(self._get_split_path(config))
+        with open(self._get_split_path(config), "rb") as fd:
+            data = pickle.load(fd)
+            all_valid_video_ids = set(
+                [os.path.splitext(fn)[0] for fn in os.listdir(vfeat_dir)]
+            )
+            recs = defaultdict(list)
+            video_ids = set()
+            valid_video_ids = set()
+            for rec in data:  # filter videos not available.
+                udl_idx = rec["id"].rindex("_")
+                video_id = rec["id"][:udl_idx]
+                video_ids.add(video_id)
+                if video_id in all_valid_video_ids:
+                    valid_video_ids.add(video_id)
+                    recs[video_id].append(rec)
+            print("total video_ids in .pkl", len(video_ids))
+            print("valid video_ids in .pkl", len(valid_video_ids))
+            print("please verify {train,val}_list.txt")
+            self.data = list(valid_video_ids)
+            self.recs = recs
+
+        with open(config.trainval_annotation) as fd:
+            self.youcook_annotation = json.load(fd)["database"]
+        if config.use_annotation_text is True:
+            print("using text in annotation.")
+            self.use_annotation_caption = True
+        else:
+            self.use_annotation_caption = False
+
+    def __getitem__(self, idx):
+        def _get_captions(recs):
+            captions = []
+            for rec in recs:
+                vid = rec["id"]
+                udl_idx = vid.rindex("_")
+                video_id, clip_id = vid[:udl_idx], int(vid[udl_idx + 1 :])
+                clip = self.youcook_annotation[video_id]["annotations"][clip_id]
+                if self.use_annotation_caption:
+                    caption = clip["sentence"]
+                else:
+                    caption = rec["caption"]
+                captions.append(caption)
+            return captions
+
+        video_id = self.data[idx]
+        return video_id, _get_captions(self.recs[video_id])
+
+
 # --------------------- CrossTask -------------------------
 
 
