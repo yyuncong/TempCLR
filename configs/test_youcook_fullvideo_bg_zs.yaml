@@ -11,8 +11,8 @@ dataset:
   use_annotation_text: true
   vfeat_dir: data/youcookii/features
   text_processor: YoucookFullVideoBGTextProcessor
-  sliding_window: 8
-  sliding_window_size: 8
+  sliding_window: 16
+  sliding_window_size: 16
   num_iso_layer: 12
   max_video_len: 32
   max_len: 96
